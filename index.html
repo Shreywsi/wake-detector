@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Wake Detector" />
+  <title>Wake Detector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Syne', sans-serif;
+      background: #f5f4f0;
+      color: #1a1a1a;
+      min-height: 100vh;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body { background: #1a1a1a; color: #f0efeb; }
+      .status-card, .log, .threshold-row, .chart-wrap { background: #2a2a2a !important; border-color: rgba(255,255,255,0.1) !important; }
+      .btn { background: #2a2a2a !important; border-color: rgba(255,255,255,0.15) !important; color: #f0efeb !important; }
+      .btn:hover { background: #333 !important; }
+      .metric { background: #222 !important; }
+      .motion-bar-wrap { background: #333 !important; }
+    }
+
+    .app {
+      max-width: 420px;
+      margin: 0 auto;
+      padding: 2rem 1rem 4rem;
+    }
+
+    .header { margin-bottom: 2rem; }
+    .header h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.5px; }
+    .header p { font-size: 13px; color: #888; margin-top: 4px; }
+
+    .status-card {
+      background: white;
+      border: 0.5px solid rgba(0,0,0,0.12);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+
+    .motion-ring {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      margin: 0 auto 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      background: #f5f4f0;
+      border: 3px solid #ddd;
+      transition: all 0.4s ease;
+    }
+
+    .motion-ring.asleep { border-color: #5DCAA5; background: #E1F5EE; }
+    .motion-ring.awake {
+      border-color: #EF9F27;
+      background: #FAEEDA;
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.06); }
+    }
+
+    .status-label { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+    .status-sub { font-size: 12px; color: #888; font-family: 'DM Mono', monospace; }
+
+    .motion-bar-wrap {
+      margin-top: 1rem;
+      background: #eee;
+      border-radius: 99px;
+      height: 6px;
+      overflow: hidden;
+    }
+
+    .motion-bar {
+      height: 100%;
+      border-radius: 99px;
+      background: #1D9E75;
+      width: 0%;
+      transition: width 0.3s ease, background 0.3s ease;
+    }
+
+    .motion-bar.high { background: #EF9F27; }
+
+    .controls { display: flex; gap: 8px; margin-bottom: 1rem; }
+
+    .btn {
+      flex: 1;
+      padding: 13px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: 'Syne', sans-serif;
+      font-weight: 600;
+      cursor: pointer;
+      border: 0.5px solid rgba(0,0,0,0.15);
+      background: white;
+      color: #1a1a1a;
+      transition: background 0.15s;
+    }
+
+    .btn:hover { background: #f5f4f0; }
+    .btn.primary { background: #1D9E75; color: white; border-color: #1D9E75; }
+    .btn.primary:hover { background: #0F6E56; }
+    .btn.danger { background: #fff0f0; color: #c0392b; border-color: #f5c6c6; }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 8px;
+      margin-top: 1.5rem;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 1rem;
+    }
+
+    .metric {
+      background: #eeecea;
+      border-radius: 10px;
+      padding: 12px 10px;
+      text-align: center;
+    }
+
+    .metric-val {
+      font-size: 20px;
+      font-weight: 600;
+      font-family: 'DM Mono', monospace;
+      line-height: 1.2;
+    }
+
+    .metric-label { font-size: 11px; color: #888; margin-top: 2px; }
+
+    .chart-wrap {
+      background: white;
+      border: 0.5px solid rgba(0,0,0,0.1);
+      border-radius: 16px;
+      padding: 1rem;
+      position: relative;
+      height: 180px;
+      margin-bottom: 1rem;
+    }
+
+    .log {
+      background: white;
+      border: 0.5px solid rgba(0,0,0,0.1);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .log-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 14px;
+      border-bottom: 0.5px solid rgba(0,0,0,0.07);
+      font-size: 13px;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .log-row:last-child { border-bottom: none; }
+
+    .log-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot-wake { background: #EF9F27; }
+    .dot-sleep { background: #1D9E75; }
+
+    .log-time {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: #888;
+      margin-left: auto;
+    }
+
+    .empty-log { padding: 2rem; text-align: center; color: #aaa; font-size: 13px; }
+
+    .threshold-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: white;
+      border: 0.5px solid rgba(0,0,0,0.1);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 1rem;
+    }
+
+    .threshold-row label { font-size: 13px; color: #888; flex-shrink: 0; }
+    .threshold-row input[type=range] { flex: 1; }
+
+    .threshold-val {
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      font-weight: 500;
+      min-width: 20px;
+      text-align: right;
+    }
+
+    .pwa-tip {
+      background: #e8f4fd;
+      color: #1a5f8a;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 12px;
+      line-height: 1.6;
+      margin-top: 1.5rem;
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>Wake detector</h1>
+    <p>Tracks motion and logs when you wake up</p>
+  </div>
+
+  <div class="status-card">
+    <div class="motion-ring asleep" id="ring">😴</div>
+    <div class="status-label" id="statusLabel">Asleep</div>
+    <div class="status-sub" id="statusSub">No motion detected</div>
+    <div class="motion-bar-wrap">
+      <div class="motion-bar" id="motionBar"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn primary" id="startBtn" onclick="startTracking()">Start tracking</button>
+    <button class="btn" id="stopBtn" onclick="stopTracking()" style="display:none">Stop</button>
+    <button class="btn danger" onclick="clearLog()">Clear</button>
+  </div>
+
+  <div class="threshold-row">
+    <label>Sensitivity</label>
+    <input type="range" min="1" max="10" value="3" step="1" id="threshold" oninput="updateThreshold(this.value)">
+    <span class="threshold-val" id="threshVal">3</span>
+  </div>
+
+  <div class="section-title">Today</div>
+  <div class="metrics">
+    <div class="metric">
+      <div class="metric-val" id="wakeCount">0</div>
+      <div class="metric-label">wake events</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val" id="firstWake">--</div>
+      <div class="metric-label">first wake</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val" id="lastWake">--</div>
+      <div class="metric-label">last wake</div>
+    </div>
+  </div>
+
+  <div class="section-title">Motion history</div>
+  <div class="chart-wrap">
+    <canvas id="motionChart"></canvas>
+  </div>
+
+  <div class="section-title">Wake log</div>
+  <div class="log" id="logList">
+    <div class="empty-log">Start tracking to see your wake events</div>
+  </div>
+
+  <div class="pwa-tip">
+    <strong>Install as app:</strong> Tap the Share button in Safari, then "Add to Home Screen" to use this like a native app.
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+  let tracking = false, motionListener = null, currentMotion = 0;
+  let threshold = 3, isAwake = false, sleepTimer = null;
+  let log = JSON.parse(localStorage.getItem('wakeLog') || '[]');
+  let motionHistory = [], chart = null, histTimer = null;
+
+  function updateThreshold(v) {
+    threshold = parseInt(v);
+    document.getElementById('threshVal').textContent = v;
+  }
+
+  function fmt(d) {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function startTracking() {
+    if (typeof DeviceMotionEvent === 'undefined') {
+      alert('Motion sensor not available on this device/browser.');
+      return;
+    }
+    if (typeof DeviceMotionEvent.requestPermission === 'function') {
+      DeviceMotionEvent.requestPermission()
+        .then(state => { if (state === 'granted') beginListening(); else alert('Permission denied. Go to Settings > Safari > Motion & Orientation Access.'); })
+        .catch(() => beginListening());
+    } else {
+      beginListening();
+    }
+  }
+
+  function beginListening() {
+    tracking = true;
+    document.getElementById('startBtn').style.display = 'none';
+    document.getElementById('stopBtn').style.display = '';
+    motionListener = (e) => {
+      const a = e.acceleration || e.accelerationIncludingGravity;
+      if (!a) return;
+      const mag = Math.sqrt((a.x||0)**2 + (a.y||0)**2 + (a.z||0)**2);
+      currentMotion = Math.round(mag * 10) / 10;
+      updateUI(mag);
+    };
+    window.addEventListener('devicemotion', motionListener);
+    initChart();
+    histTimer = setInterval(recordHistory, 2000);
+  }
+
+  function stopTracking() {
+    tracking = false;
+    if (motionListener) window.removeEventListener('devicemotion', motionListener);
+    clearInterval(histTimer);
+    document.getElementById('startBtn').style.display = '';
+    document.getElementById('stopBtn').style.display = 'none';
+    setStatus(false);
+  }
+
+  function updateUI(mag) {
+    const pct = Math.min(100, (mag / (threshold * 2)) * 100);
+    const bar = document.getElementById('motionBar');
+    bar.style.width = Math.round(pct) + '%';
+    if (mag >= threshold) {
+      bar.classList.add('high');
+      if (!isAwake) triggerWake();
+      resetSleepTimer();
+    } else {
+      bar.classList.remove('high');
+    }
+  }
+
+  function triggerWake() {
+    isAwake = true;
+    setStatus(true);
+    const entry = { type: 'wake', time: new Date().toISOString() };
+    log.unshift(entry);
+    localStorage.setItem('wakeLog', JSON.stringify(log.slice(0, 100)));
+    renderLog();
+    updateMetrics();
+  }
+
+  function resetSleepTimer() {
+    clearTimeout(sleepTimer);
+    sleepTimer = setTimeout(() => { isAwake = false; setStatus(false); }, 8000);
+  }
+
+  function setStatus(awake) {
+    const ring = document.getElementById('ring');
+    const label = document.getElementById('statusLabel');
+    const sub = document.getElementById('statusSub');
+    if (awake) {
+      ring.className = 'motion-ring awake';
+      ring.textContent = '👁️';
+      label.textContent = 'Awake!';
+      sub.textContent = 'Motion detected — ' + fmt(new Date());
+    } else {
+      ring.className = 'motion-ring asleep';
+      ring.textContent = '😴';
+      label.textContent = 'Asleep';
+      sub.textContent = tracking ? 'Monitoring motion...' : 'Not tracking';
+    }
+  }
+
+  function clearLog() {
+    log = [];
+    localStorage.setItem('wakeLog', '[]');
+    renderLog();
+    updateMetrics();
+  }
+
+  function renderLog() {
+    const el = document.getElementById('logList');
+    if (!log.length) { el.innerHTML = '<div class="empty-log">No wake events yet</div>'; return; }
+    el.innerHTML = log.slice(0, 10).map(e => {
+      const d = new Date(e.time);
+      return `<div class="log-row"><div class="log-dot dot-${e.type}"></div><span>${e.type === 'wake' ? 'Woke up' : 'Fell asleep'}</span><span class="log-time">${fmt(d)}</span></div>`;
+    }).join('');
+  }
+
+  function updateMetrics() {
+    const today = log.filter(e => e.type === 'wake' && new Date(e.time).toDateString() === new Date().toDateString());
+    document.getElementById('wakeCount').textContent = today.length;
+    document.getElementById('firstWake').textContent = today.length ? fmt(new Date(today[today.length-1].time)) : '--';
+    document.getElementById('lastWake').textContent = today.length ? fmt(new Date(today[0].time)) : '--';
+  }
+
+  function recordHistory() {
+    if (!tracking) return;
+    motionHistory.push(currentMotion);
+    if (motionHistory.length > 30) motionHistory.shift();
+    if (chart) {
+      chart.data.labels = motionHistory.map(() => '');
+      chart.data.datasets[0].data = [...motionHistory];
+      chart.update('none');
+    }
+  }
+
+  function initChart() {
+    const ctx = document.getElementById('motionChart').getContext('2d');
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: Array(30).fill(''),
+        datasets: [{ data: Array(30).fill(0), borderColor: '#1D9E75', backgroundColor: 'rgba(29,158,117,0.08)', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { display: false },
+          y: { display: true, min: 0, max: 20, ticks: { font: { size: 11 }, color: '#888' }, grid: { color: 'rgba(128,128,128,0.1)' } }
+        },
+        animation: false
+      }
+    });
+  }
+
+  renderLog();
+  updateMetrics();
+</script>
+</body>
+</html>
